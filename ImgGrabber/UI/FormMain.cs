@@ -1224,14 +1224,26 @@ namespace ImgGrabber
 
                 stopwatch.Restart();
 
+                bool isNextJobReady = (State == ProcessState.Ready);
+
                 if (useStartTimeout)
                 {
-                    StartTimeoutTimer.Enabled = false;
-                    bFlagGrabStart = true;
+                    if (!isNextJobReady)
+                    {
+                        StartTimeoutTimer.Enabled = false;
+                        bFlagGrabStart = true;
+                    } //네트워크 지연 후 조명이 Off될 때 사용
                 }
 
-                lightControl.LightAllOnOff(false);
-                Logging("Light Off");
+                if (!isNextJobReady)
+                {
+                    lightControl.LightAllOnOff(false);
+                    Logging("Light Off");
+                }
+                else
+                {
+                    Logging("Skip Light Off (Next Job is Ready)");
+                } //네트워크 지연 후 조명이 Off될 때 사용
 
                 bool ret = true;
 
@@ -1243,6 +1255,8 @@ namespace ImgGrabber
                     }
                 }
 
+                List<string> currentCell_ID = new List<string>(listCell_ID);
+                string safeCellDataString = string.Join(",", currentCell_ID);
                 /*
                 int childIndex = 0;
                 foreach (ROI child in recipe.ListChildImageRoi)
@@ -1272,14 +1286,14 @@ namespace ImgGrabber
                         {
                             int cellIndex = child.CellNo - 1;
 
-                            if (listCell_ID[cellIndex].Contains("NOCELL"))
+                            if (currentCell_ID[cellIndex].Contains("NOCELL"))
                             {
                                 continue;
                             }
 
-                            string file = listCell_ID.Count == recipe.ListChildImageRoi.Count
-                                ? $@"{imageSharePath}\{listCell_ID[index]}.bmp"
-                                : $@"{imageSharePath}\{listCell_ID[cellIndex]}{child.Name}.bmp";
+                            string file = currentCell_ID.Count == recipe.ListChildImageRoi.Count
+                                ? $@"{imageSharePath}\{currentCell_ID[index]}.bmp"
+                                : $@"{imageSharePath}\{currentCell_ID[cellIndex]}{child.Name}.bmp";
 
                             //공유폴더 저장
                             grabControl.ChildSave(file, index);
@@ -1314,7 +1328,8 @@ namespace ImgGrabber
 
                 if (useCommunication)
                 {
-                    comm.SendGrabEnd(CellDatas, ret);
+                    comm.SendGrabEnd(safeCellDataString, ret);
+                    //comm.SendGrabEnd(CellDatas, ret);
 
                     if (ret == false)
                     {
@@ -1322,13 +1337,18 @@ namespace ImgGrabber
                         Process(ProcessState.Alarm);
                     }
 
-                    Logging($"End Grab Process [Cell : {CellDatas}], [Shared : {ret}]");
+                    Logging($"End Grab Process [Cell : {safeCellDataString}], [Shared : {ret}]");
+                    //Logging($"End Grab Process [Cell : {CellDatas}], [Shared : {ret}]");
                     EMASLogging("Grab_Process", true);
 
-                    CellDatas = "";
+                    //safeCellDataString = "";
+                    //CellDatas = "";
                 }
 
-                Process(ProcessState.End);
+                if (!isNextJobReady)
+                {
+                    Process(ProcessState.End);
+                } //네트워크 지연 후 조명이 Off될 때 사용
 
                 Logging($"Save End [{stopwatch.Elapsed:mm\\:ss\\.ff}]");
                 stopwatch.Restart();
@@ -1342,7 +1362,7 @@ namespace ImgGrabber
                         { 
                             int cellIndex = child.CellNo - 1;
 
-                            if (listCell_ID[cellIndex].Contains("NOCELL"))
+                            if (currentCell_ID[cellIndex].Contains("NOCELL"))
                             {
                                 continue;
                             }
@@ -1352,9 +1372,9 @@ namespace ImgGrabber
                             DirectoryInfo BackupInfo = new DirectoryInfo(path);
                             if (!BackupInfo.Exists) { BackupInfo.Create(); }
 
-                            string file = listCell_ID.Count == recipe.ListChildImageRoi.Count
-                                ? $@"{path}\{listCell_ID[index]}.bmp"
-                                : $@"{path}\{listCell_ID[cellIndex]}{child.Name}.bmp";
+                            string file = currentCell_ID.Count == recipe.ListChildImageRoi.Count
+                                ? $@"{path}\{currentCell_ID[index]}.bmp"
+                                : $@"{path}\{currentCell_ID[cellIndex]}{child.Name}.bmp";
 
                             //백업폴더 저장
                             grabControl.ChildSave(file, index);
